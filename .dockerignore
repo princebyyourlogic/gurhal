@@ -1,0 +1,11 @@
+# Only Go sources and license notices enter the build context.
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+**/*_test.go

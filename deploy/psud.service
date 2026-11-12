@@ -1,0 +1,50 @@
+# psud as a systemd service, without Docker (see DEPLOY.md). Install:
+#   install -m 755 psud psuctl /usr/local/bin/
+#   install -d -m 755 /opt/psud && cp -r data /opt/psud/data      (built by make import)
+#   install -m 640 -o root -g psud psud.env /etc/psud.env          (from .env.example)
+#   cp psud.service /etc/systemd/system/ && systemctl enable --now psud
+# psuctl on the host: sudo -u psud PSU_STATE_DIR=/var/lib/psud psuctl who
+
+[Unit]
+Description=Phantasy Star Universe PS2 server (psud)
+Documentation=file:///opt/psud/DEPLOY.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=psud
+Group=psud
+DynamicUser=no
+EnvironmentFile=/etc/psud.env
+Environment=PSU_STATE_DIR=/var/lib/psud PSU_DATA_DIR=/opt/psud/data
+StateDirectory=psud
+StateDirectoryMode=0750
+ExecStart=/usr/local/bin/psud
+Restart=on-failure
+RestartSec=5
+# psud writes the last character saves before it exits.
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Ports are all above 1024: no capabilities needed.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+ReadOnlyPaths=/opt/psud/data
+
+[Install]
+WantedBy=multi-user.target

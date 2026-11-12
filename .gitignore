@@ -1,0 +1,18 @@
+# Game files come from the owner's disc and are never committed or published.
+disc/
+data/
+extract-cache/
+*.iso
+psu_us_strings.txt
+nbl.cs
+# The upstream Python server (reference only), local runs and logs.
+prettystellaruniverse/
+run/
+*.log
+testplay-*.json
+work/
+backups/
+.env
+state/
+.env.*
+!.env.example

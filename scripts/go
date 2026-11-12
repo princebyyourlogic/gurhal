@@ -1,0 +1,27 @@
+#!/bin/sh
+# Runs the pinned Go toolchain: `go` from PATH when it is the pinned release, else a checksum-
+# verified official download kept under work/.go-toolchains. Changes nothing outside this repo.
+set -eu
+VERSION=go1.27.4
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+case "$(uname -s)/$(uname -m)" in
+  Linux/x86_64)  PLAT=linux-amd64 SUM=7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840 ;;
+  Linux/aarch64) PLAT=linux-arm64 SUM=3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92 ;;
+  *) echo "scripts/go: no pinned toolchain for $(uname -s)/$(uname -m); install $VERSION on PATH" >&2; exit 1 ;;
+esac
+GO=$(command -v go || true)
+if [ -z "$GO" ] || [ "$("$GO" env GOVERSION 2>/dev/null)" != "$VERSION" ]; then
+  DIR="$ROOT/work/.go-toolchains/$VERSION-$PLAT"
+  GO="$DIR/go/bin/go"
+  if [ ! -x "$GO" ]; then
+    mkdir -p "$DIR"
+    TGZ="$DIR/go.tar.gz"
+    echo "scripts/go: downloading $VERSION ($PLAT)" >&2
+    curl -fsSL "https://go.dev/dl/$VERSION.$PLAT.tar.gz" -o "$TGZ"
+    echo "$SUM  $TGZ" | sha256sum -c - >/dev/null
+    tar -xzf "$TGZ" -C "$DIR" && rm "$TGZ"
+  fi
+fi
+export GOTOOLCHAIN=local CGO_ENABLED="${CGO_ENABLED:-0}" GOFLAGS="${GOFLAGS:--buildvcs=false}"
+export GOPATH="$ROOT/work/.go-path" GOCACHE="$ROOT/work/.go-cache"
+exec "$GO" "$@"

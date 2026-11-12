@@ -1,0 +1,93 @@
+# psud + PostgreSQL: the Phantasy Star Universe PS2 server. Use the Makefile (make help).
+#
+# Not part of this stack: DNS for the discs' *.segaonline.jp names (point consoles at a
+# revive-dns that answers them with this host) and DNAS (forwarded to the hosted revival DNAS).
+#
+# What players reach, all fixed by the discs:
+#   11110 PSU patch, 11140 AotI patch       plain TCP
+#   12110 PSU login, 12140 AotI login       SSLv3
+#   12061 game (both discs)                 SSLv3
+# PostgreSQL is not published; only psud reaches it.
+name: gurhal
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: psu
+      POSTGRES_DB: psu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psu -d psu"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    logging: *logging
+
+  psud:
+    build: .
+    image: psud:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PSU_GAME_ADDR: ${PSU_GAME_ADDR:?set PSU_GAME_ADDR in .env}
+      PSU_DATABASE_URL: postgres://psu:${POSTGRES_PASSWORD}@postgres:5432/psu?sslmode=disable
+      PSU_DATA_DIR: /data
+      PSU_DISCS: ${PSU_DISCS:-}
+      PSU_AUTOREGISTER: ${PSU_AUTOREGISTER:-1}
+      PSU_MOTD: ${PSU_MOTD:-Welcome to the Phantasy Star Universe server.}
+      PSU_UNIVERSES: ${PSU_UNIVERSES:-1:Universe 1,2:Universe 2,3:Universe 3}
+      PSU_IDLE_SECS: ${PSU_IDLE_SECS:-600}
+      PSU_MAX_PER_IP: ${PSU_MAX_PER_IP:-16}
+      PSU_CONN_PER_MIN: ${PSU_CONN_PER_MIN:-60}
+      PSU_MAX_CONNS: ${PSU_MAX_CONNS:-2000}
+      PSU_REGISTER_PER_HOUR: ${PSU_REGISTER_PER_HOUR:-3}
+      PSU_LOG_LEVEL: ${PSU_LOG_LEVEL:-info}
+      PSU_ADMINS: ${PSU_ADMINS:-}
+      PSU_SEASON: ${PSU_SEASON:-none}
+      PSU_SEASON_DROP: ${PSU_SEASON_DROP:-40}
+      PSU_NEWS_TICKER_SECS: ${PSU_NEWS_TICKER_SECS:-1800}
+      PSU_BOARD_SECS: ${PSU_BOARD_SECS:-60}
+    ports:
+      - "${PSU_PUBLISH_ADDR:-0.0.0.0}:11110:11110"
+      - "${PSU_PUBLISH_ADDR:-0.0.0.0}:11140:11140"
+      - "${PSU_PUBLISH_ADDR:-0.0.0.0}:12110:12110"
+      - "${PSU_PUBLISH_ADDR:-0.0.0.0}:12140:12140"
+      - "${PSU_PUBLISH_ADDR:-0.0.0.0}:12061:12061"
+    volumes:
+      - state:/state
+      # built from your discs by make import; never part of the image
+      - ${PSU_DATA:-./data}:/data:ro
+    # Nothing to write but /state, no capabilities (every port is above 1024), no way to
+    # gain privileges, and bounded memory, threads and files.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 256
+    ulimits:
+      nofile: 8192
+    healthcheck:
+      test: ["CMD", "/psud", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+
+volumes:
+  postgres:
+  state:
